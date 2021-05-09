@@ -1,0 +1,229 @@
+---
+title: "The Relationship between Mental Health and Physical Health in Texas Counties"
+author: Taylor Gardiner tpg422
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Introduction
+
+##### For my project, I chose to analyze the way that mental health affects physical health throughout the state of Texas. I have always been interested in the multi-faceted effects of mental health and their lasting impact on overall health. I acquired my datasets through countyhealthrankings.org and limited my data to Texas because I wanted to keep my research local. I used four datasets that I believe created a fairly comprehensive look at mental and physical well-being. The first dataset I used contained information about the average number of poor mental health days in the last 30 days for adults over the age of 20, separated by county. The second dataset I used contained information about the average number of poor physical health days in the last 30 days for adults over the age of 20, separated by county. The third dataset I used showed the percentage of adults over 20 who reported no physical activity, separated by county. The fourth dataset I used showed the percentage of adults over 20 who report a BMI greater than or equal to 30 kg/m^2, also separated by county. Each dataset also contained data about the z-score and error margin associated with each county value. I expect to see that counties that report higher numbers of poor mental health days to also report higher numbers of poor physical health days, higher incidence of physical inactivity, and higher rates of obesity. I expect to see this because mental health can greatly impact an individual's diet and tendency to exercise. 
+
+```{r}
+# Importing datasets
+library(readr)
+mental_health_days <- read_csv("Desktop/school stuff/comp bio/projects/project 1/csv files/mental_health_days.csv")
+
+library(readr)
+phys_health_days <- read_csv("Desktop/school stuff/comp bio/projects/project 1/csv files/phys_health_days.csv")
+
+library(readr)
+obesity <- read_csv("Desktop/school stuff/comp bio/projects/project 1/csv files/obesity.csv")
+
+library(readr)
+inactivity <- read_csv("Desktop/school stuff/comp bio/projects/project 1/csv files/inactivity.csv")
+
+# Getting a glimpse at my datasets using the head() function
+head(mental_health_days)
+head(phys_health_days)
+head(obesity)
+head(inactivity)
+```
+
+
+### Tidy
+
+#### To tidy my datasets, I renamed my variables to make them easier to use and removed extraneous variables. 
+
+```{r}
+library(tidyverse)
+# Tidying my poor mental health days data and saving it as a new dataset.
+mentaldata <- mental_health_days %>% 
+  rename(pmhd=`County Value `) %>% # Renaming the 'County Value' variable to 'pmhd' to represent poor mental health days
+  select(County, pmhd) # Selecting only the county and pmhd columns for later use
+head(mentaldata)
+
+#Tidying my poor physical health days data and saving it as a new dataset.
+physicaldata <- phys_health_days %>% 
+  rename(pphd=`County Value `) %>% # Renaming the 'County Value' variable to 'pphd' to represent poor physical health days
+  select(County, pphd) # Selecting only the county and pphd columns for later use
+head(physicaldata)
+
+#Tidying my obesity percentage data and saving it as a new dataset.
+obesitydata <- obesity %>% 
+  separate('County Value', into = c("obesity_percent", "percentages"), sep = 2) %>% # Removing the percentage signs from the 'County Value' column and renaming the column 'obesity_percent'
+  select(County, obesity_percent) # Selecting only the county and obesity_percent columns for later use
+head(obesitydata)
+
+#Tidying my physical inactivity data and saving it as a new dataset.
+inactivitydata <- inactivity %>% 
+  separate('County Value', into = c("inactivity_percent", "percentages"), sep = 2) %>% # Removing the percentage signs from the 'County Value' column and renaming the column 'inactivity_percent'
+  select(County, inactivity_percent) # Selecting only the county and inactivity_percent columns for later use
+head(inactivitydata)
+```
+
+### Join/Merge
+
+#### I joined all four of my tidy datasets together into one 'projectdataset' using the left_join() functions.
+
+```{r}
+projectdataset <- mentaldata %>% 
+  left_join(physicaldata, by="County") %>% # Adding poor physical health days data, matching by county name
+  left_join(obesitydata, by="County") %>% # Adding obesity percentages data, matching by county name
+  left_join(inactivitydata, by="County") # Adding physical inactivty percentages data, matching by county name
+```
+
+*I did not have any issues merging my datasets together. No cases had to be dropped as there was sufficient data for each variable in every county.*
+
+### Summary Statistics
+
+#### Before I calculated summary statistics, I created a new categorical variable called "obesity_level" that identified counties as having a high, medium, or low obesity level based on their obesity percentage data. I named the new dataset containing this variable "fulldataset".
+
+```{r}
+# To determine the range of obesity percentages in my dataset
+projectdataset %>% summarize(min(obesity_percent))
+projectdataset %>% summarize(max(obesity_percent))
+projectdataset %>% arrange(desc(obesity_percent))
+projectdataset %>% arrange(obesity_percent)
+
+#To create my new variable
+fulldataset <- projectdataset %>%
+   mutate(obesity_level=case_when(obesity_percent>=40 ~ "high", 
+                                   30<=obesity_percent & obesity_percent<40 ~ "med",
+                                   obesity_percent<30 ~ "low"))
+head(fulldataset)
+```
+
+*I categorized counties with obesity percentages less than 30% as low, greater than or equal to 30% but less than 40% as medium, and greater than or equal to 40% as high.*
+
+#### Next, I began calculating summary statistics for my numeric variables across the different levels of my categorical variable. I wanted to find counts of counties in each obesity level category. I also wanted to observe trends in Central Texas in particular, so I isolated the counties in Central Texas and explored. I also created a correlation matrix for all of my numeric variables.
+
+```{r}
+# To coerce my obesity_percent and inactivity_percent variables to numeric
+fulldataset <- fulldataset %>% mutate_at(vars(obesity_percent, inactivity_percent), cols = NULL, as.numeric) 
+fulldataset %>% 
+  group_by(obesity_level) %>% # To group by obesity levels
+  summarize(mean_pmhd=mean(pmhd), sd_pmhd=sd(pmhd), mean_pphd=mean(pphd), sd_pphd=sd(pphd), mean_obesity=mean(obesity_percent), sd_obesity=sd(obesity_percent), mean_inactivity=mean(inactivity_percent), sd_inactivity=sd(inactivity_percent)) # To find mean and standard deviation for my numeric variables at each level of my categorical variable
+```
+
+Obesity Level | Mean PMHD (days) | SD PMHD (days) | Mean PPHD (days) | SD PPHD (days) | Mean Obesity% | SD Obesity % | Mean Inactivity% | SD Inactivity %
+------------- | --------- | ------- | --------- | ------- | ------------- | ------------ | ---------------- | -------------
+High | 4.2 | .248 | 4.08 | .341 | 41.6 | 2.11 | 31.2 | 4.48
+Medium | 4.1 | .246 | 3.99 | .45 | 33.8 | 2.74 | 28.7 | 4.43
+Low | 3.99 | .282 | 3.87 | .45 | 26.4 | 2.01 | 25.1 | 3.91
+
+*A table showing the mean and standard deviation of each numeric variable at each obesity level.*
+
+```{r}
+# To determine how many counties are in each obesity level category.
+fulldataset %>% filter(obesity_level=="high") %>% summarize(count=n())
+fulldataset %>% filter(obesity_level=="med") %>% summarize(count=n())
+fulldataset %>% filter(obesity_level=="low") %>% summarize(count=n())
+```
+
+*20 counties had obesity percentages in the high category, 127 counties had obesity percentages in the medium category, and 107 counties had obesity percentages in the low category.*
+
+```{r}
+# To filter values for Travis County only
+fulldataset %>% filter(County=="Travis") %>% select(pmhd,obesity_level)
+# To filter values for Tarrant County only
+fulldataset %>% filter(County=="Tarrant") %>% select(pmhd,obesity_level)
+```
+
+*I wanted to compare mental health and obesity in Travis county, where I live now, to mental health and obesity in Tarrant county, where I grew up. I found that Travis county is healthier than Tarrant county in these two parameters. Travis county reported less poor mental health days in the last 30 days than Tarrant county did, as well as lower levels of obesity.*
+
+```{r}
+# To create a correlation matrix for my numeric variables
+cormatrix <- fulldataset %>% select_if(is.numeric)
+cor(cormatrix, use = "pairwise.complete.obs")
+```
+
+*A matrix showing the correlations between each of the numeric variables. These results will be further discussed through a correlation heatmap.*
+
+### Visualizations
+
+#### First, I created a correlation matrix heatmap to analyze the relationships between my numeric variables.
+
+```{r}
+cor(cormatrix, use="pairwise.complete.obs") %>% # To calculate correlation values
+  as.data.frame %>% # Save as a data frame
+  rownames_to_column %>% # Convert rownames to a specific variable
+  pivot_longer(-1, names_to="other_var", values_to="correlation") %>% # Pivot so that all correlations are in the same column
+  ggplot(aes(rowname, other_var, fill=correlation)) + geom_tile() + scale_fill_gradient2(low="red",mid="white",high="blue") + geom_text(aes(label=round(correlation,2)), color="black", size=4) + labs(title= "Correlation Matrix for Numeric Variables", x="Variable 1", y="Variable 2") + theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+
+*It is clear from the correlation heatmap that the strongest relationship exists between the number of poor mental health days and the number of poor physical health days. I expected this because people who are not feeling well physically are most likely not feeling well mentally either, and vice versa. The weakest relationship exists between the number of poor physical health days and the percentage of people who did not engage in physical activity. I found this surprising because I assumed that people who were not feeling well physically would not want to engage in physical activity. There was a moderately strong relationship between the percentage of adults who were obese and the percentage of adults who did not engage in physical activity. This was expected because exercise is a way to combat obesity.* 
+
+#### Next, I wanted to visualize the relationship between number of poor mental health days an adult experiences and their rates of inactivity for each obesity level. I used a scatterplot to do this.
+
+```{r}
+ggplot(data = fulldataset, aes(x = pmhd, y = inactivity_percent, color = obesity_level)) + geom_point(size=2) + theme_minimal() + ggtitle("Relationship between Poor Mental Health Days and Inactivity") + xlab("Poor Mental Health Days (days)") + ylab("Inactivity Percentage (%)") + geom_smooth(method="lm") + scale_color_brewer(palette="Spectral")
+```
+
+*It can be seen from the scatterplot that counties in the high obesity level category had relatively higher numbers of poor mental health days and a higher inactivity percentage. Counties in the low and medium obesity categories had more varied data, but it is clear that counties in the low obesity category had lower rates of inactivity. Interestingly, counties in the low and medium obesity categories seem to have similar incidence of poor mental health days. It can also be seen that the linear relationship between number of poor mental health days and inactivity percentage is stronger for the medium obesity level group.*
+
+#### For my last data visualization, I wanted to view the relationship between poor mental health days and poor physical health days for each obesity level.
+
+```{r}
+# Creating a bar graph to show poor mental health days per obesity level with error bars
+ggplot(data=fulldataset, aes(x=obesity_level, fill=obesity_level)) + geom_bar(aes(y=pmhd), stat="summary", fun="mean") + scale_y_continuous(name="Number of Poor Mental Health Days per Month", breaks = seq(0,6, by=1)) + geom_errorbar(stat="summary", fun.data="mean_se", aes(y=pmhd), width=.5) + scale_fill_brewer(palette="RdPu")
+
+# Creating a bar graph to show poor physical health days per obesity level with error bars
+ggplot(data=fulldataset, aes(x=obesity_level, fill=obesity_level)) + geom_bar(aes(y=pphd), stat="summary", fun="mean") + scale_y_continuous(name="Number of Poor Physical Health Days per Month", breaks = seq(0,6, by=1)) + geom_errorbar(stat="summary", fun.data="mean_se", aes(y=pphd), width=.5) + scale_fill_brewer(palette="YlOrRd")
+```
+
+*It can be seen from these graphs that poor mental health days and poor physical health days follow similar trends through each obesity level. Counties with high obesity levels reported higher numbers of poor mental and physical health days and counties with low obesity levels reported lower numbers of poor mental health days. The graphs are also similar in that counties with high obesity levels have larger standard errors in their numbers of poor mental and physical health days. This fits my original expectation that poor mental health plays a role in poor physical health and obesity in Texas.*
+
+### Dimensionality Reduction
+
+#### First, I reduced my data using PCA. 
+
+```{r}
+# Scaling my numeric variables and creating a new dataset for PCA
+pcadata <- fulldataset %>% select(-County, -obesity_level) %>% scale()
+
+# Performing PCA
+pca <- pcadata %>% prcomp()
+
+# Determining the percent of variance explained by each principal component
+percent <- 100* (pca$sdev^2 / sum(pca$sdev^2))
+percent
+
+# Constructing a scree plot to determine the number of principal components to consider
+library(factoextra)
+fviz_screeplot(pca, addlabels = TRUE, ylim = c(0, 100))
+```
+
+*Unfortunately there is not a clear "elbow" to the plot, but over 80% of the variation in the data can be explained by PC1 and PC2, so I will move forward utilizing those two principal components.*
+
+```{r}
+# Adding my obesity_level data back into my pca dataset.
+pcafinal <- data.frame(pca$x, obesity_level=fulldataset$obesity_level)
+
+# Viewing the data along PC1 and PC2 via a scatterplot colored by obesity level
+ggplot(pcafinal, aes(x = PC1, y = PC2, color = obesity_level)) + geom_point()
+```
+
+#### Next, I performed PAM clustering on my PCA data to identify clusters of data.
+
+```{r}
+# Installing package needed to perform PAM clustering
+library(cluster)
+
+# Performing PAM on PC1 and PC2 across 3 clusters.
+pam <- pcafinal %>% select(PC1, PC2) %>% pam(k=3)
+
+# Adding cluster assignment to the pcafinal dataset and renaming it
+finalclustering <- pcafinal %>% mutate(cluster = as.factor(pam$clustering))
+head(finalclustering)
+
+# Creating a scatterplot to view the data colored by obesity level with clusters shown as ellipses
+ggplot(finalclustering, aes(x=PC1, y=PC2)) + geom_point(aes(color=obesity_level)) + stat_ellipse(aes(group=cluster))
+```
+
+*I chose three clusters for PAM to fit my three obesity levels: high, medium, and low. I found that the clusters often overlap across obesity levels but also found that generally speaking, counties with high and medium obesity levels clustered together. The overlap could be due to the fact that there was still a considerable amount of variance explained by PC3 and PC4, which were not included in my PAM analysis. It also suggests that there is not a huge impact on obesity level by my other variables for counties in Texas.*
+
+#### Through this analysis, I found that there are trends between an increase in poor mental health days and an increase in other less favorable health characteristics, such as poor physical health days, inactivity, and obesity. This project allowed me to take a closer look at the relationship between multiple variables in a subject I find interesting. 
